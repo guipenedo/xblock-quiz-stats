@@ -1,0 +1,99 @@
+<div class="quiz_stats_block" id="quiz_stats_block_{{ xblock_id }}" data-state="{{ data }}">
+    <script type="text/template" id="quiz_stats_tmpl_{{ xblock_id }}">
+        <div class="section-header">
+            <h2><i class="fa fa-bar-chart" aria-hidden="true"></i>
+                Estatísticas</h2>
+            <% if (is_course_cohorted) { %>
+            <select class="turma-select" id="turmas_filter_{{ xblock_id }}" data-column="4">
+                <option value="">– Turma –</option>
+                <% for(let ti = 0; ti < cohorts.length; ti++){let turma = cohorts[ti];%>
+                <option value="<%= turma %>"><%= turma %></option>
+                <% } %>
+            </select>
+            <% } %>
+        </div>
+        <% if(nr_submissions > 0) { %>
+            <div class="stats-pills">
+                <div class="stats-pill"><b>Nº submissões</b> <%= nr_submissions %>/<%= nr_submissions + no_submission.length %></div>
+                <div class="stats-pill"><b>Média</b> <%= average %>/<%= max_score %></div>
+                <div class="stats-pill"><b>Mediana</b> <%= median %>/<%= max_score %></div>
+                <div class="stats-pill"><b>Intervalo</b> <%= limits[0] %> - <%= limits[1] %> pontos (em <%= max_score %>)</div>
+            </div>
+            <div class="stats_chart" id="point_distribution"></div>
+            <h2><i class="fa fa-times" aria-hidden="true"></i>
+                 Mais falhadas</h2>
+            <div class="section-header">
+                <b>Pergunta</b>
+                <b>Respostas corretas</b>
+            </div>
+            <div class="table-container">
+                <% for(let erri = 0; erri < mais_erradas.length; erri++){ %>
+                <a class="table-entry clickable-entry" href="#question_chart_<%= mais_erradas[erri]['index'] %>">
+                    <span class="question-title"><%= mais_erradas[erri]['title'] %></span>
+                    <b><%= mais_erradas[erri]['correct_count'] %>/<%= nr_submissions
+                    %></b>
+                </a>
+                <% } %>
+            </div>
+            <h2><i class="fa fa-star" aria-hidden="true"></i>
+                 Classificações</h2>
+            <div class="section-header">
+                <b>Nome</b>
+                <div>
+                    <b class="submission-title">Hora submissão</b>
+                    <b>Classificação</b>
+                </div>
+            </div>
+            <div class="table-container">
+                <% for(let subi = 0; subi < submissions.length; subi++){ %>
+                <a class="table-entry clickable-entry view-student-answer" data-student-i="<%= subi %>" href="#view_student_answer_{{ xblock_id }}">
+                    <span><%= submissions[subi]['name'] %></span>
+                    <div>
+                    <span class="submission-entry"><%= (new Date(submissions[subi]['timestamp'])).toLocaleString() %></span>
+                    <b><%= submissions[subi]['score'] %>/<%= max_score
+                        %></b>
+                    </div>
+                </a>
+                <% } %>
+            </div>
+            <h2><i class="fa fa-frown-o" aria-hidden="true"></i>
+                Alunos sem submissão</h2>
+            <div class="section-header">
+                <b>Nome</b>
+            </div>
+            <div class="table-container">
+                <% for(let nsi in no_submission){ %>
+                <div class="table-entry"><%= no_submission[nsi] %></div>
+                <% } %>
+            </div>
+            <h2><i class="fa fa-question" aria-hidden="true"></i>
+                 Perguntas</h2>
+            <% for(let pi = 0; pi < questions.length; pi++){ let q = questions[pi];%>
+                <div class="stats_chart" id="question_chart_<%= pi %>"></div>
+            <% } %>
+        <% } else { %>
+            <h3>Ainda não há submissões.</h3>
+        <% } %>
+    </script>
+    <script type="text/template" id="quiz_stats_tmpl_student_answer_{{ xblock_id }}">
+        <h2>Aluno: <%= name %></h2>
+        <h3><b><%= score %>/<%= max_score %></b> (<%= (new Date(timestamp)).toLocaleString() %>)</h3>
+        <p></p>
+        <% for(let pi = 0; pi < questions.length; pi++){ let q = questions[pi];%>
+            <h3><%= q['title'] %></h3>
+            <p> <b>Resposta: </b>
+                <% if (student_questions[q['title']]['correct']) { %>
+                    <i class="fa fa-check" aria-hidden="true" style="color: green"></i>
+                <% } else { %>
+                    <i class="fa fa-times" aria-hidden="true" style="color: darkred"></i>
+                <% } %>
+                <%= student_questions[q['title']]['answer'] %></p>
+        <% } %>
+    </script>
+    <div id="quiz_stats_content_{{ xblock_id }}">
+    </div>
+    <section aria-hidden="true" class="modal student-answer-modal" id="view_student_answer_{{ xblock_id }}" tabindex="-1">
+        <div class="inner-wrapper" style="color: black">
+        </div>
+    </section>
+</div>

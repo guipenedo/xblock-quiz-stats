@@ -1,0 +1,43 @@
+<div class="wrapper-comp-settings is-active editor-with-buttons" >
+    <ul class="list-input   ">
+        <li class="field comp-setting-entry is-set">
+            <div class="wrapper-comp-setting"><label class="label setting-label" for="initial_code_{{xblock_id}}">Initial code</label>
+                <div id="initial_code_{{xblock_id}}">{{initial_code}}</div>
+            </div>
+            <span class="tip setting-help">O código inicial para este problema</span>
+        </li>
+        {% if uses_grader %}
+            <li class="field comp-setting-entry is-set">
+                <div class="wrapper-comp-setting"><label class="label setting-label" for="grader_code_{{xblock_id}}">Grader code</label>
+                    <div id="grader_code_{{xblock_id}}">{{grader_code}}</div>
+                </div>
+                <span class="tip setting-help">O grader para este problema (grader.py). Deverá chamar uma função do código do aluno (que está no ficheiro main.py) e imprimir para o stdout o que deverá ser comparado com a output do caso de teste (pode ser algo dinâmico). Para problemas em que os alunos utilizem stdin/out, façam a chamada para a função deles com o gutils.NoStd</span>
+            </li>
+        {% endif %}
+        {% if not no_submission %}
+        <li class="field comp-setting-entry is-set">
+            <div class="wrapper-comp-setting"><label class="label setting-label" for="model_answer_{{xblock_id}}">Model answer</label>
+                <div id="model_answer_{{xblock_id}}">{{model_answer}}</div>
+            </div>
+            <span class="tip setting-help">Solução modelo para este problema</span>
+            <div class="code-feedback" id="code-feedback_{{xblock_id}}"></div>
+        </li>
+        {% endif %}
+    </ul>
+    <div class="xblock-actions pyjudge-actions">
+        <ul class="action">
+            <li class="action-item">
+                <button id="save-button_{{xblock_id}}" class="submit btn-brand" type="button">
+                    <span class="submit-label">Guardar</span>
+                </button>
+            </li>
+            {% if not no_submission %}
+            <li class="action-item">
+                <button id="test_model_answer_{{xblock_id}}" class="submit btn-brand" type="button">
+                    <span class="submit-label">Guardar e Testar solução modelo</span>
+                </button>
+            </li>
+            {% endif %}
+        </ul>
+    </div>
+</div>

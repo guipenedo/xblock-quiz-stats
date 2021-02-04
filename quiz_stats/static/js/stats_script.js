@@ -136,6 +136,8 @@ function QuizStatsXBlock(runtime, element, context) {
     }
 
     function processData(data){
+        console.log("Processing data:")
+        console.log(data)
         let scores = []; // list of scores to calculate average, median, etc
         let sum_scores = 0; // sum of scores for avg calculation
         let max_score = -1; // max score for this problem
@@ -266,6 +268,8 @@ function QuizStatsXBlock(runtime, element, context) {
             processed_data['median'] = ((N % 2) === 0 ? 0.5 * (scores[Math.max(N / 2 - 1, 0)] + scores[N / 2]) : scores[Math.floor(N / 2)]).toFixed(2);
             processed_data['limits'] = [scores[0], scores[N - 1]];
         }
+        console.log("Finished processing data:")
+        console.log(processed_data)
         return processed_data;
     }
 

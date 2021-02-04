@@ -163,7 +163,7 @@ function QuizStatsXBlock(runtime, element, context) {
             let user_data = data[useri];
             // skip quem não submeteu
             if (!('user_states' in user_data) || !('correct_map' in user_data['state'])) {
-                no_submission.push(user_data['username'])
+                no_submission.push(user_data['name'] ? user_data['name'] : user_data['username'])
                 continue
             }
 

@@ -149,6 +149,8 @@ function QuizStatsXBlock(runtime, element, context) {
         let question_options = []; // l[i] is a dictionary with answer: {count, correct}
         let question_correct_count = []; // l[i] is list of correct options for question i
 
+        const us_answer_id = "ID. da Resposta", us_question = "Pergunta", us_correct = "Resposta Correta", us_answer = "Resposta";
+
         function init_answer(qi, answer) {
             if (!(answer in question_options[qi]))
                 question_options[qi][answer] = {
@@ -181,9 +183,9 @@ function QuizStatsXBlock(runtime, element, context) {
             let u_s = user_data['user_states'];
             let student_questions = {};
             for (let j = 0; j < u_s.length; j++)
-                if ("Question" in u_s[j]) {
-                    let question_title = u_s[j]["Question"], answer = u_s[j]["Answer"],
-                        correct = u_s[j]["Correct Answer"], qid = u_s[j]["Answer ID"];
+                if (us_question in u_s[j]) {
+                    let question_title = u_s[j][us_question], answer = u_s[j][us_answer],
+                        correct = u_s[j][us_correct], qid = u_s[j][us_answer_id];
                     let qi = question_titles.indexOf(question_title);
                     if (qi === -1) {
                         // queremos adicionar à lista de questões

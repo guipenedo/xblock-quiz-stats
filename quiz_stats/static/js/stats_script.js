@@ -247,7 +247,7 @@ function QuizStatsXBlock(runtime, element, context) {
         let N = scores.length;
         let mais_erradas = [];
         for (let mei = 0; mei < questions_erradas.length; mei++) {
-            if (questions_erradas[mei]['correct_count'] < 0.7 * N)
+            if (questions_erradas[mei]['correct_count'] < N)
                 mais_erradas.push(questions_erradas[mei])
         }
         let processed_data = {

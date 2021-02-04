@@ -149,7 +149,7 @@ function QuizStatsXBlock(runtime, element, context) {
         let question_options = []; // l[i] is a dictionary with answer: {count, correct}
         let question_correct_count = []; // l[i] is list of correct options for question i
 
-        const us_answer_id = "ID. da Resposta", us_question = "Pergunta", us_correct = "Resposta Correta", us_answer = "Resposta";
+        const us_answer_id = "ID. da Resposta", us_question = "Pergunta", us_correct = "Resposta Correta", us_answer = "Resposta:";
 
         function init_answer(qi, answer) {
             if (!(answer in question_options[qi]))
@@ -238,18 +238,13 @@ function QuizStatsXBlock(runtime, element, context) {
         for (let qii = 0; qii < questions.length; qii++) {
             questions[qii]['index'] = qii;
         }
-        let questions_erradas = [...questions];
-        questions_erradas.sort(function (a, b) {
+        let mais_erradas = [...questions];
+        mais_erradas.sort(function (a, b) {
             if (a['correct_count'] === b['correct_count'])
                 return get_quest_nr(a['title']) - get_quest_nr(b['title'])
             return a['correct_count'] - b['correct_count'];
         }) // sort submissions by correct answers
         let N = scores.length;
-        let mais_erradas = [];
-        for (let mei = 0; mei < questions_erradas.length; mei++) {
-            if (questions_erradas[mei]['correct_count'] < N)
-                mais_erradas.push(questions_erradas[mei])
-        }
         let processed_data = {
             'nr_submissions': N,
             'no_submission': no_submission,

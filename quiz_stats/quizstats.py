@@ -1,5 +1,5 @@
 import json
-from collections import defaultdict
+from collections import defaultdict, Set
 
 import pkg_resources
 import six
@@ -17,8 +17,11 @@ from webob.response import Response
 from django.core.exceptions import PermissionDenied
 from xmodule.modulestore.django import modulestore
 from openedx.core.djangoapps.course_groups.cohorts import get_cohort, is_course_cohorted, get_course_cohorts
+from xmodule.util.sandboxing import get_python_lib_zip
 
-from common.djangoapps.student.models import user_by_anonymous_id, get_user_by_username_or_email
+from xmodule.contentstore.django import contentstore
+
+from common.djangoapps.student.models import user_by_anonymous_id, get_user_by_username_or_email, CourseEnrollment
 from lms.djangoapps.course_blocks.api import get_course_blocks
 from lms.djangoapps.courseware.user_state_client import DjangoXBlockUserStateClient
 from lms.djangoapps.instructor_analytics.basic import list_problem_responses
@@ -145,13 +148,22 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
                     if hasattr(block, 'generate_report_data'):
                         try:
                             user_state_iterator = user_state_client.iter_all_for_block(block_key)
-                            for username, state in block.generate_report_data(user_state_iterator, max_count):
+                            for username, state in self.generate_report_data(block, user_state_iterator, max_count):
                                 generated_report_data[username].append(state)
                         except NotImplementedError:
                             pass
+                    cohorted = is_course_cohorted(self.course_id)
+
+                    def in_cohort(user):
+                        if cohorted:
+                            cohort = get_cohort(user, course_key, assign=False, use_cached=True)
+                            if not cohort or (self.cohort and cohort.name != self.cohort):
+                                # skip this one if not on the requested cohort or has no cohort (instructor)
+                                return False
+                        return True
 
                     responses = []
-
+                    usernames = set()
                     for response in list_problem_responses(course_key, block_key, max_count):
                         # A block that has a single state per user can contain multiple responses
                         # within the same state.
@@ -159,9 +171,8 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
                             user = get_user_by_username_or_email(response['username'])
                         except User.DoesNotExist:
                             continue
-                        cohort = get_cohort(user, course_key, assign=False, use_cached=True)
-                        if self.cohort and (not cohort or cohort.name != self.cohort):
-                            # skip this one if not on the requested cohort
+                        usernames.add(user.username)
+                        if not in_cohort(user):
                             continue
                         names = user.profile.name.split()
                         if len(names) > 0:
@@ -176,7 +187,19 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
                         if user_states:
                             response['user_states'] = user_states
                         responses.append(response)
-
+                    enrollments = CourseEnrollment.objects.filter(course_id=self.course_id)
+                    print("wtf mate")
+                    print(enrollments)
+                    print(usernames)
+                    for enr in enrollments:
+                        if enr.user.username in usernames:
+                            print(enr.user.username, "is in usernames")
+                            continue
+                        if in_cohort(enr.user):
+                            student_data += [{'username': enr.user.username}]
+                            print(enr.user, "in cohort")
+                        else:
+                            print(enr.user, "not in cohort")
                     student_data += responses
         return student_data
 
@@ -215,6 +238,92 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
     @property
     def is_staff(self):
         return getattr(self.xmodule_runtime, 'user_is_staff', False)
+
+    def generate_report_data(self, block, user_state_iterator, limit_responses=None):
+
+        from capa.capa_problem import LoncapaProblem, LoncapaSystem
+
+        if block.category != 'problem':
+            raise NotImplementedError()
+
+        if limit_responses == 0:
+            # Don't even start collecting answers
+            return
+
+        capa_system = LoncapaSystem(
+            ajax_url=None,
+            # TODO set anonymous_student_id to the anonymous ID of the user which answered each problem
+            # Anonymous ID is required for Matlab, CodeResponse, and some custom problems that include
+            # '$anonymous_student_id' in their XML.
+            # For the purposes of this report, we don't need to support those use cases.
+            anonymous_student_id=None,
+            cache=None,
+            can_execute_unsafe_code=lambda: None,
+            get_python_lib_zip=(lambda: get_python_lib_zip(contentstore, block.runtime.course_id)),
+            DEBUG=None,
+            filestore=block.runtime.resources_fs,
+            i18n=block.runtime.service(block, "i18n"),
+            node_path=None,
+            render_template=None,
+            seed=1,
+            STATIC_URL=None,
+            xqueue=None,
+            matlab_api_key=None,
+        )
+        _ = capa_system.i18n.ugettext
+
+        count = 0
+        for user_state in user_state_iterator:
+            if 'student_answers' not in user_state.state:
+                continue
+
+            lcp = LoncapaProblem(
+                problem_text=block.data,
+                id=block.location.html_id(),
+                capa_system=capa_system,
+                # We choose to run without a fully initialized CapaModule
+                capa_module=None,
+                state={
+                    'done': user_state.state.get('done'),
+                    'correct_map': user_state.state.get('correct_map'),
+                    'student_answers': user_state.state.get('student_answers'),
+                    'has_saved_answers': user_state.state.get('has_saved_answers'),
+                    'input_state': user_state.state.get('input_state'),
+                    'seed': user_state.state.get('seed'),
+                },
+                seed=user_state.state.get('seed'),
+                # extract_tree=False allows us to work without a fully initialized CapaModule
+                # We'll still be able to find particular data in the XML when we need it
+                extract_tree=False,
+            )
+
+            for answer_id, orig_answers in lcp.student_answers.items():
+                # Some types of problems have data in lcp.student_answers that isn't in lcp.problem_data.
+                # E.g. formulae do this to store the MathML version of the answer.
+                # We exclude these rows from the report because we only need the text-only answer.
+                if answer_id.endswith('_dynamath'):
+                    continue
+
+                if limit_responses and count >= limit_responses:
+                    # End the iterator here
+                    return
+
+                question_text = lcp.find_question_label(answer_id)
+                try:
+                    answer_text = lcp.find_answer_text(answer_id, current_answer=orig_answers)
+                except AssertionError:
+                    continue
+                correct_answer_text = lcp.find_correct_answer_text(answer_id)
+
+                count += 1
+                report = {
+                    "answer_id": answer_id, # _("Answer ID")
+                    "question": question_text, # _("Question")
+                    "answer": answer_text, # _("Answer")
+                }
+                if correct_answer_text is not None:
+                    report["correct_answer"] = correct_answer_text # _("Correct Answer")
+                yield user_state.username, report
 
 
 def require(assertion):

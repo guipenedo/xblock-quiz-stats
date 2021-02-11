@@ -149,7 +149,7 @@ function QuizStatsXBlock(runtime, element, context) {
         let question_options = []; // l[i] is a dictionary with answer: {count, correct}
         let question_correct_count = []; // l[i] is list of correct options for question i
 
-        const us_answer_id = "ID. da Resposta", us_question = "Pergunta", us_correct = "Resposta Correta", us_answer = "Resposta:";
+        const us_answer_id = "answer_id", us_question = "question", us_correct = "correct_answer", us_answer = "answer";
 
         function init_answer(qi, answer) {
             if (!(answer in question_options[qi]))

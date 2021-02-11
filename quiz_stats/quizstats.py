@@ -65,8 +65,8 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
         return Fragment(
             "<p>Clica em preview ou live para veres o conteúdo deste bloco.</p>"
             "<p>Notas:</p>"
-            "<ol> <li>1. Esta unidade (das stats) deverá ter a opção <b>Hide from learners --></b> ativada.</li>"
-            "<li>2. As questões do quiz deverão estar numeradas (começar com 1., 2., etc) para garantir a correta ordenação das stats.</li></ol>")
+            "<ol> <li>1. Esta unidade (stats) deverá estar imediatamente a seguir à unidade com o quiz (que preferencialmente será só um bloco).</li><li>2. Esta unidade (das stats) deverá ter a opção <b>Hide from learners --></b> ativada.</li>"
+            "<li>3. As questões do quiz deverão estar numeradas (começar com 1., 2., etc) para garantir a correta ordenação das stats.</li></ol>")
 
     # noinspection PyProtectedMember
     def student_view(self, _context):

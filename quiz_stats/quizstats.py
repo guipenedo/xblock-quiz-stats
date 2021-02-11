@@ -21,10 +21,11 @@ from xmodule.contentstore.django import contentstore
 from xmodule.modulestore.django import modulestore
 from xmodule.util.sandboxing import get_python_lib_zip
 
+from opaque_keys.edx.keys import UsageKey
 from common.djangoapps.student.models import user_by_anonymous_id, get_user_by_username_or_email, CourseEnrollment
 from lms.djangoapps.course_blocks.api import get_course_blocks
 from lms.djangoapps.courseware.models import StudentModule
-from lms.djangoapps.instructor_analytics.basic import list_problem_responses
+from lms.djangoapps.instructor_analytics.basic import get_response_state
 from lms.djangoapps.instructor_task.tasks_helper.grades import ProblemResponses
 from openedx.core.djangoapps.course_groups.cohorts import get_cohort, is_course_cohorted, get_course_cohorts
 
@@ -359,3 +360,44 @@ def iter_all_for_block(block_key, scope=Scope.user_state):
                 yield XBlockUserState(sm.student.username, sm.module_state_key, state, sm.modified, scope)
             except User.DoesNotExist:
                 pass
+
+
+def list_problem_responses(course_key, problem_location, limit_responses=None):
+    """
+    Return responses to a given problem as a dict.
+
+    list_problem_responses(course_key, problem_location)
+
+    would return [
+        {'username': u'user1', 'state': u'...'},
+        {'username': u'user2', 'state': u'...'},
+        {'username': u'user3', 'state': u'...'},
+    ]
+
+    where `state` represents a student's response to the problem
+    identified by `problem_location`.
+    """
+    if isinstance(problem_location, UsageKey):
+        problem_key = problem_location
+    else:
+        problem_key = UsageKey.from_string(problem_location)
+    # Are we dealing with an "old-style" problem location?
+    run = problem_key.run
+    if not run:
+        problem_key = UsageKey.from_string(problem_location).map_into_course(course_key)
+    if problem_key.course_key != course_key:
+        return []
+
+    smdat = StudentModule.objects.filter(
+        course_id=course_key,
+        module_state_key=problem_key
+    )
+    smdat = smdat.order_by('student')
+    if limit_responses is not None:
+        smdat = smdat[:limit_responses]
+
+    for response in smdat:
+        try:
+            yield {'username': response.student.username, 'state': get_response_state(response)}
+        except User.DoesNotExist:
+            continue

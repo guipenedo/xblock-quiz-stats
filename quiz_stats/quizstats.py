@@ -78,16 +78,12 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
         """
         if not self.is_staff:
             return Fragment("Erro: esta página só está disponível para instrutores")
-        try:
-            quizdata = self.get_quiz_data()
-        except InvalidKeyError:
-            return Fragment("Erro ao procurar o quiz - este deverá estar na unidade imediatamente antes!")
+
         data = {
             'xblock_id': self._get_xblock_loc(),
             'is_course_cohorted': is_course_cohorted(self.course_id),
             'cohorts': [group.name for group in get_course_cohorts(course_id=self.course_id)],
-            'cohort': self.cohort,
-            'data': quizdata
+            'cohort': self.cohort
         }
         html = loader.render_django_template('templates/stats_display.html', data)
         frag = Fragment(html)
@@ -109,20 +105,13 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
         user_id = user_by_anonymous_id(self.xmodule_runtime.anonymous_student_id).id
         course_key = self.course_id
 
-        usage_key = None
-        # sacamos a unidade imediatamente antes desta
-        verts = self.get_parent().get_parent().children
-        for i in range(1, len(verts)):
-            if verts[i].block_id == self.parent.block_id:
-                usage_key = verts[i - 1]
-                break
+        usage_key = self.get_quiz_unit()
         if not usage_key:
             raise InvalidKeyError
 
         user = get_user_model().objects.get(pk=user_id)
 
         student_data = []
-        max_count = settings.FEATURES.get('MAX_PROBLEM_RESPONSES_COUNT')
 
         store = modulestore()
 
@@ -140,13 +129,12 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
 
                 # Blocks can implement the generate_report_data method to provide their own
                 # human-readable formatting for user state.
-                if hasattr(block, 'generate_report_data'):
-                    try:
-                        user_state_iterator = iter_all_for_block(block_key)
-                        for username, state in self.generate_report_data(block, user_state_iterator, max_count):
-                            generated_report_data[username].append(state)
-                    except NotImplementedError:
-                        pass
+                try:
+                    user_state_iterator = iter_all_for_block(block_key)
+                    for username, state in self.generate_report_data(block, user_state_iterator):
+                        generated_report_data[username].append(state)
+                except NotImplementedError:
+                    pass
                 cohorted = is_course_cohorted(self.course_id)
 
                 def in_cohort(user):
@@ -166,7 +154,7 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
                     return name
 
                 responses = []
-                for response in list_problem_responses(course_key, block_key, max_count):
+                for response in list_problem_responses(course_key, block_key):
                     # A block that has a single state per user can contain multiple responses
                     # within the same state.
                     try:
@@ -202,7 +190,7 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
         try:
             quizdata = self.get_quiz_data()
         except InvalidKeyError:
-            return Fragment("Erro ao procurar o quiz - corrige a localização nas settings!")
+            return Response(body="keyerror")
         return Response(json.dumps(quizdata))
 
     @XBlock.json_handler
@@ -238,10 +226,6 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
 
         if block.category != 'problem':
             raise NotImplementedError()
-
-        if limit_responses == 0:
-            # Don't even start collecting answers
-            return
 
         capa_system = LoncapaSystem(
             ajax_url=None,
@@ -297,16 +281,12 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
                 if answer_id.endswith('_dynamath'):
                     continue
 
-                if limit_responses and count >= limit_responses:
-                    # End the iterator here
-                    return
-
-                question_text = lcp.find_question_label(answer_id)
                 try:
+                    question_text = lcp.find_question_label(answer_id)
                     answer_text = lcp.find_answer_text(answer_id, current_answer=orig_answers)
+                    correct_answer_text = lcp.find_correct_answer_text(answer_id)
                 except AssertionError:
                     continue
-                correct_answer_text = lcp.find_correct_answer_text(answer_id)
 
                 count += 1
                 report = {
@@ -317,6 +297,13 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
                 if correct_answer_text is not None:
                     report["correct_answer"] = correct_answer_text  # _("Correct Answer")
                 yield user_state.username, report
+
+    def get_quiz_unit(self):
+        # sacamos a unidade imediatamente antes desta
+        verts = self.get_parent().get_parent().children
+        for i in range(1, len(verts)):
+            if verts[i].block_id == self.parent.block_id:
+                return verts[i - 1]
 
 
 def require(assertion):
@@ -362,7 +349,7 @@ def iter_all_for_block(block_key, scope=Scope.user_state):
                 pass
 
 
-def list_problem_responses(course_key, problem_location, limit_responses=None):
+def list_problem_responses(course_key, problem_location):
     """
     Return responses to a given problem as a dict.
 
@@ -393,8 +380,6 @@ def list_problem_responses(course_key, problem_location, limit_responses=None):
         module_state_key=problem_key
     )
     smdat = smdat.order_by('student')
-    if limit_responses is not None:
-        smdat = smdat[:limit_responses]
 
     for response in smdat:
         try:

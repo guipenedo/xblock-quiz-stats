@@ -2,6 +2,7 @@ function QuizStatsXBlock(runtime, element, context) {
     function xblock($, _) {
         let template = _.template($(element).find("#quiz_stats_tmpl_" + context.xblock_id).text());
         let answer_template = _.template($(element).find("#quiz_stats_tmpl_student_answer_" + context.xblock_id).text());
+        const not_found_error = "Erro ao procurar o quiz - este deverá estar na unidade imediatamente antes!";
 
         function updateData(){
             const load_stats_url = runtime.handlerUrl(element, 'load_stats');
@@ -10,11 +11,15 @@ function QuizStatsXBlock(runtime, element, context) {
             });
         }
 
-
         function render(data) {
+            let content_el = $(element).find('#quiz_stats_content_' + context.xblock_id);
+            if (data === "keyerror"){
+                content_el.text(not_found_error);
+                return;
+            }
             // Render template
             data = processData(data);
-            $(element).find('#quiz_stats_content_' + context.xblock_id).html(template(data));
+            content_el.html(template(data));
             // charts
             if (data.nr_submissions > 0)
                 Highcharts.chart('point_distribution', {
@@ -130,8 +135,8 @@ function QuizStatsXBlock(runtime, element, context) {
                 });
         }
 
-        $(function () { // onLoad
-            render(context.data);
+        $(function () {
+            updateData();
         });
     }
 

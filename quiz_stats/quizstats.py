@@ -33,13 +33,6 @@ loader = ResourceLoader(__name__)
 
 ITEM_TYPE = "quiz_stats"
 
-
-def resource_string(path):
-    """Handy helper for getting resources from our kit."""
-    data = pkg_resources.resource_string(__name__, path)
-    return data.decode("utf8")
-
-
 def dump(obj):
     s = ""
     for attr in dir(obj):
@@ -82,19 +75,19 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
         data = {
             'xblock_id': self._get_xblock_loc(),
             'is_course_cohorted': is_course_cohorted(self.course_id),
-            'cohorts': [group.name for group in get_course_cohorts(course_id=self.course_id)],
+            'cohorts': self.get_cohorts(),
             'cohort': self.cohort
         }
         html = loader.render_django_template('templates/stats_display.html', data)
         frag = Fragment(html)
 
-        frag.add_css(resource_string("static/css/quiz_stats.css"))
+        frag.add_css(self.resource_string("static/css/quiz_stats.css"))
 
-        frag.add_css(resource_string("static/highcharts/css/highcharts.css"))
-        frag.add_javascript(resource_string("static/highcharts/highcharts.js"))
-        frag.add_javascript(resource_string("static/highcharts/modules/histogram-bellcurve.js"))
+        frag.add_css(self.resource_string("static/highcharts/css/highcharts.css"))
+        frag.add_javascript(self.resource_string("static/highcharts/highcharts.js"))
+        frag.add_javascript(self.resource_string("static/highcharts/modules/histogram-bellcurve.js"))
 
-        frag.add_javascript(resource_string("static/js/stats_script.js"))
+        frag.add_javascript(self.resource_string("static/js/stats_script.js"))
         frag.initialize_js('QuizStatsXBlock', data)
 
         return frag
@@ -116,7 +109,10 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
         store = modulestore()
 
         with store.bulk_operations(course_key):
-            course_blocks = get_course_blocks(user, usage_key)
+            try:
+                course_blocks = get_course_blocks(user, usage_key)
+            except:
+                raise QuizNotFound
             usernames = set()
             for title, path, block_key in pr_class._build_problem_list(course_blocks, usage_key):
                 # Chapter and sequential blocks are filtered out since they include state
@@ -189,8 +185,8 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
         require(self.is_staff)
         try:
             quizdata = self.get_quiz_data()
-        except InvalidKeyError:
-            return Response(body="keyerror")
+        except QuizNotFound:
+            return Response(json.dumps("keyerror"))
         return Response(json.dumps(quizdata))
 
     @XBlock.json_handler
@@ -211,6 +207,9 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
         Return the course_id of the block.
         """
         return six.text_type(self.course_id)
+
+    def get_cohorts(self):
+        return [group.name for group in get_course_cohorts(course_id=self.course_id)]
 
     def _get_xblock_loc(self):
         """Returns trailing number portion of self.location"""
@@ -305,6 +304,12 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
             if verts[i].block_id == self.parent.block_id:
                 return verts[i - 1]
 
+    @classmethod
+    def resource_string(cls, path):
+        """Handy helper for getting resources from our kit."""
+        data = pkg_resources.resource_string(__name__, path)
+        return data.decode("utf8")
+
 
 def require(assertion):
     """
@@ -386,3 +391,8 @@ def list_problem_responses(course_key, problem_location):
             yield {'username': response.student.username, 'state': get_response_state(response)}
         except User.DoesNotExist:
             continue
+
+
+class QuizNotFound(Exception):
+    """Base class for exceptions in this module."""
+    pass

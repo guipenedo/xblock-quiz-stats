@@ -27,17 +27,24 @@ from lms.djangoapps.course_blocks.api import get_course_blocks
 from lms.djangoapps.courseware.models import StudentModule
 from lms.djangoapps.instructor_analytics.basic import get_response_state
 from lms.djangoapps.instructor_task.tasks_helper.grades import ProblemResponses
-from openedx.core.djangoapps.course_groups.cohorts import get_cohort, is_course_cohorted, get_course_cohorts
+from openedx.core.djangoapps.course_groups.cohorts import get_cohort, is_course_cohorted, get_course_cohorts, get_random_cohort
 
 loader = ResourceLoader(__name__)
 
 ITEM_TYPE = "quiz_stats"
+
 
 def dump(obj):
     s = ""
     for attr in dir(obj):
         s += f"<li>obj.{attr} = {getattr(obj, attr)}</li>\n"
     return s
+
+
+def resource_string(path):
+    """Handy helper for getting resources from our kit."""
+    data = pkg_resources.resource_string(__name__, path)
+    return data.decode("utf8")
 
 
 class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
@@ -81,13 +88,13 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
         html = loader.render_django_template('templates/stats_display.html', data)
         frag = Fragment(html)
 
-        frag.add_css(self.resource_string("static/css/quiz_stats.css"))
+        frag.add_css(resource_string("static/css/quiz_stats.css"))
 
-        frag.add_css(self.resource_string("static/highcharts/css/highcharts.css"))
-        frag.add_javascript(self.resource_string("static/highcharts/highcharts.js"))
-        frag.add_javascript(self.resource_string("static/highcharts/modules/histogram-bellcurve.js"))
+        frag.add_css(resource_string("static/highcharts/css/highcharts.css"))
+        frag.add_javascript(resource_string("static/highcharts/highcharts.js"))
+        frag.add_javascript(resource_string("static/highcharts/modules/histogram-bellcurve.js"))
 
-        frag.add_javascript(self.resource_string("static/js/stats_script.js"))
+        frag.add_javascript(resource_string("static/js/stats_script.js"))
         frag.initialize_js('QuizStatsXBlock', data)
 
         return frag
@@ -97,6 +104,8 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
         pr_class = ProblemResponses().__class__
         user_id = user_by_anonymous_id(self.xmodule_runtime.anonymous_student_id).id
         course_key = self.course_id
+
+        valid_cohorts = self.get_cohorts()
 
         usage_key = self.get_quiz_unit()
         if not usage_key:
@@ -136,18 +145,10 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
                 def in_cohort(user):
                     if cohorted:
                         cohort = get_cohort(user, course_key, assign=False, use_cached=True)
-                        if not cohort or (self.cohort and cohort.name != self.cohort):
+                        if not cohort or cohort.name not in valid_cohorts or (self.cohort and cohort.name != self.cohort):
                             # skip this one if not on the requested cohort or has no cohort (instructor)
                             return False
                     return True
-
-                def format_name(name):
-                    names = name.split()
-                    if len(names) > 0:
-                        name = names[0]
-                    if len(names) > 1:
-                        name += " " + names[-1]
-                    return name
 
                 responses = []
                 for response in list_problem_responses(course_key, block_key):
@@ -160,7 +161,7 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
                     usernames.add(user.username)
                     if not in_cohort(user):
                         continue
-                    response['name'] = format_name(user.profile.name)
+                    response['name'] = self.format_name(user.profile.name)
                     user_states = generated_report_data.get(response['username'])
                     response['state'] = json.loads(response['state'])
                     response['state'].pop('input_state', None)
@@ -175,7 +176,7 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
                         continue
                     if in_cohort(enr.user):  # add missing students
                         student_data.append(
-                            {'username': enr.user.username, 'name': format_name(enr.user.profile.name)})
+                            {'username': enr.user.username, 'name': self.format_name(enr.user.profile.name)})
                         usernames.add(enr.user.username)
                 student_data += responses
         return student_data
@@ -209,11 +210,23 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
         return six.text_type(self.course_id)
 
     def get_cohorts(self):
-        return [group.name for group in get_course_cohorts(course_id=self.course_id)]
+        cohorts = [""] + [group.name for group in get_course_cohorts(course_id=self.course_id)]
+        random_cohort = get_random_cohort(self.course_id)
+        if random_cohort and random_cohort.name in cohorts:
+            cohorts.remove(random_cohort.name)
+        return cohorts
 
     def _get_xblock_loc(self):
         """Returns trailing number portion of self.location"""
         return str(self.location).split('@')[-1]
+
+    def format_name(self, name):
+        names = name.split()
+        if len(names) > 0:
+            name = names[0]
+        if len(names) > 1:
+            name += " " + names[-1]
+        return name
 
     @property
     def is_staff(self):
@@ -303,12 +316,6 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
         for i in range(1, len(verts)):
             if verts[i].block_id == self.parent.block_id:
                 return verts[i - 1]
-
-    @classmethod
-    def resource_string(cls, path):
-        """Handy helper for getting resources from our kit."""
-        data = pkg_resources.resource_string(__name__, path)
-        return data.decode("utf8")
 
 
 def require(assertion):

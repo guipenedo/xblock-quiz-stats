@@ -5,8 +5,10 @@
                 Estatísticas</h2>
             <% if (is_course_cohorted) { %>
             <select class="turma-select" id="turmas_filter_{{ xblock_id }}" data-column="4">
-                <option value="">– Turma –</option>
                 <% for(let ti = 0; ti < cohorts.length; ti++){let turma = cohorts[ti];%>
+                <% if(turma === "") %>
+                <option value="">– Turma –</option>
+                <% else %>
                 <option value="<%= turma %>"><%= turma %></option>
                 <% } %>
             </select>

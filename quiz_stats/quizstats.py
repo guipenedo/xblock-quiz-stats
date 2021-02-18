@@ -21,6 +21,8 @@ from xmodule.contentstore.django import contentstore
 from xmodule.modulestore.django import modulestore
 from xmodule.util.sandboxing import get_python_lib_zip
 
+from xblock.completable import XBlockCompletionMode
+
 from opaque_keys.edx.keys import UsageKey
 from common.djangoapps.student.models import user_by_anonymous_id, get_user_by_username_or_email, CourseEnrollment
 from lms.djangoapps.course_blocks.api import get_course_blocks
@@ -60,6 +62,7 @@ class QuizStatsXBlock(XBlock, StudioEditableXBlockMixin):
 
     editable_fields = 'display_name'
     has_author_view = True
+    completion_mode = XBlockCompletionMode.EXCLUDED
 
     # ----------- Views -----------
     def author_view(self, _context):
